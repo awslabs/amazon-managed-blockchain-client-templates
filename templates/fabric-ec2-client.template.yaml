@@ -1,0 +1,244 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'This template creates an EC2 instance in your VPC. It attaches provided security rules
+              to the instance to communicate with an existing Amazon Managed Blockchain network.
+              Additionally, the instance will be bootstrapped with all of the required dependencies to communicate with
+              entities in the blockchain network.'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: EC2 instance parameters
+        Parameters:
+          - SubnetID
+          - EC2SecurityGroup
+          - EC2KeyPairName
+          - InstanceType
+          - InstanceProfileName
+      - Label:
+          default: Managed Blockchain parameters
+        Parameters:
+          - Version
+          - MemberID
+      - Label:
+          default: Hyperledger Fabric parameters
+        Parameters:
+          - FabricCAEndpoint
+          - OrderingServiceEndpoint
+          - PeerNodeEndpoint
+
+
+Parameters:
+  Version:
+    Description: The version of the blockchain framework that the network uses.
+    Type: String
+    Default: 1.2
+    AllowedValues: [1.2]
+    ConstraintDescription: must be a version supported by Amazon Managed Blockchain.
+  SubnetID:
+    Description: The ID of an existing subnet into which the EC2 instance is launched. Must be a public subnet.
+    Type: AWS::EC2::Subnet::Id
+  EC2SecurityGroup:
+    Description: The ID of an existing security group to attach to the instance. It must be available in the subnet you specify and allow traffic from the VPC endpoint for your blockchain network.
+    Type: AWS::EC2::SecurityGroup::Id
+  EC2KeyPairName:
+    Description:  Name of an existing EC2 key pair to enable SSH access to the instance.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  InstanceType:
+    Description: EC2 instance type to use for the client hardware
+    Type: String
+    Default: t3.small
+    AllowedValues: [t2.nano, t2.micro, t2.small, t2.medium, t2.large, t2.xlarge, t2.2xlarge,
+                    t3.nano, t3.micro, t3.small, t3.medium, t3.large, t3.xlarge, t3.2xlarge,
+                    m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+                    m5.large, m5.xlarge, m5.2xlarge, m5.4xlarge,
+                    c5.large, c5.xlarge, c5.2xlarge, c5.4xlarge, c5.9xlarge,
+                    g3.8xlarge,
+                    r5.large, r5.xlarge, r5.2xlarge, r5.4xlarge, r3.12xlarge,
+                    i3.xlarge, i3.2xlarge, i3.4xlarge, i3.8xlarge,
+                    d2.xlarge, d2.2xlarge, d2.4xlarge, d2.8xlarge]
+    ConstraintDescription: must be a valid EC2 instance type.
+  InstanceProfileName:
+    Description: (Optional) The name of the Instance Profile to attach to the EC2 instance.
+    Type: String
+    Default: ''
+  FabricCAEndpoint:
+    Description: The endpoint used to access the certificate authority within a membership. Of the format ca.<member-id>.<network-id>.managedblockchain.<region>.amazonaws.com:<port>
+    Type: String
+  MemberID:
+    Description: Your member id for the network.
+    Type: String
+  OrderingServiceEndpoint:
+    Description: The endpoint of the ordering service for the network. Of the format orderer.<network-id>.managedblockchain.<region>.amazonaws.com:<port>
+    Type: String
+  PeerNodeEndpoint:
+    Description: The endpoint used to communicate with the node on the network. Of the format <node-id>.<member-id>.<network-id>.managedblockchain.<region>.amazonaws.com:<port>
+    Type: String
+
+
+Conditions:
+  HasInstanceProfileName:
+    !Not [ !Equals [ !Ref 'InstanceProfileName', '' ] ]
+
+Mappings:
+  AWSRegionToAMI:
+    us-east-1:
+      HVM64: ami-0080e4c5bc078760e
+  AWSRegionToCertificateUrl:
+    us-east-1:
+      TLS: https://s3.amazonaws.com/us-east-1.managedblockchain/etc/managedblockchain-tls-chain.pem
+  FrameworkVersionToPackageVersion:
+    "1.2":
+      DOCKERCOMPOSE: "1.20.0"
+      GO: "1.10.3"
+      FABRICTOOLS: "1.2.0"
+      FABRICCA: "release-1.2"
+
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref 'InstanceType'
+      KeyName: !Ref 'EC2KeyPairName'
+      ImageId: !FindInMap [ AWSRegionToAMI, !Ref "AWS::Region", HVM64 ]
+      IamInstanceProfile: !If [ HasInstanceProfileName, !Ref 'InstanceProfileName', !Ref "AWS::NoValue" ]
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: [ !Ref 'EC2SecurityGroup' ]
+          SubnetId: !Ref 'SubnetID'
+      Tags:
+        - Key: 'Name'
+          Value: 'HyperledgerFabricClient'
+      UserData:
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              set -e
+              set -x
+
+              cd /home/ec2-user
+
+              yum update -y
+              yum install -y docker
+              service docker start
+              usermod -a -G docker ec2-user
+
+              curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+              chmod a+x /usr/local/bin/docker-compose
+              yum install libtool -y
+              wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
+              tar -xzf go${GO_VERSION}.linux-amd64.tar.gz
+              mv go /usr/local
+              yum install libtool-ltdl-devel -y
+              yum install git -y
+
+              echo 'export GOROOT=/usr/local/go
+              export GOPATH=/home/ec2-user/go
+              export PATH=$GOROOT/bin:$PATH' >> /home/ec2-user/.bash_profile
+              source /home/ec2-user/.bash_profile
+
+              # Clone Fabric-ca github repository
+              go get -u github.com/hyperledger/fabric-ca/cmd/...
+              cd /home/ec2-user/go/src/github.com/hyperledger/fabric-ca
+              git fetch
+              git checkout ${FABRIC_CA_VERSION}
+              make fabric-ca-client
+              cd /home/ec2-user
+
+              echo 'export PATH=$PATH:/home/ec2-user/go/src/github.com/hyperledger/fabric-ca/bin' >> /home/ec2-user/.bash_profile
+              source /home/ec2-user/.bash_profile
+
+
+              # Setup Fabric-ca client profile
+              mkdir -p /home/ec2-user/.fabric-ca-client
+              touch /home/ec2-user/.fabric-ca-client/fabric-ca-client-config.yaml
+
+              echo '
+              #############################################################################
+              # Client Configuration
+              #############################################################################
+
+              # URL of the Fabric-ca-server (default: http://localhost:7054)
+                                url: https://${FABRIC_CA_ENDPOINT}
+
+              # Membership Service Provider (MSP) directory
+              # This is useful when the client is used to enroll a peer or orderer, so
+              # that the enrollment artifacts are stored in the format expected by MSP.
+                                mspdir: /home/ec2-user/admin-msp
+
+              #############################################################################
+              #    TLS section for secure socket connection
+              #
+              #  certfiles - PEM-encoded list of trusted root certificate files
+              #############################################################################
+                                tls:
+                                  # TLS section for secure socket connection
+                                  certfiles: /home/ec2-user/managedblockchain-tls-chain.pem
+              ' > /home/ec2-user/.fabric-ca-client/fabric-ca-client-config.yaml
+
+              chmod 666 /home/ec2-user/.fabric-ca-client/fabric-ca-client-config.yaml
+
+              # Download TLS cert
+              wget ${TLS_CERT_URL}
+
+              # Download sample chaincode from github
+              git clone https://github.com/hyperledger/fabric-samples.git
+
+              # Bake in some fabric related ENV variables for convenience
+              echo 'export ORDERER=${ORDERING_SERVICE_ENDPOINT}' >> /home/ec2-user/.bash_profile
+
+              echo 'version: '"'2'"'
+              services:
+               cli:
+                 container_name: cli
+                 image: hyperledger/fabric-tools:${FABRIC_TOOLS_VERSION}
+                 tty: true
+                 environment:
+                   - GOPATH=/opt/gopath
+                   - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+                   - CORE_LOGGING_LEVEL=info # Set logging level to debug for more verbose logging
+                   - CORE_PEER_ID=cli
+                   - CORE_CHAINCODE_KEEPALIVE=10
+                   - CORE_PEER_LOCALMSPID=${MEMBER_ID}
+                   - CORE_PEER_MSPCONFIGPATH=/opt/home/admin-msp
+                   - CORE_PEER_ADDRESS=${PEER_NODE_ENDPOINT}
+                   - CORE_PEER_TLS_ROOTCERT_FILE=/opt/home/managedblockchain-tls-chain.pem
+                   - CORE_PEER_TLS_ENABLED=true
+                 working_dir: /opt/home
+                 command: /bin/bash
+                 volumes:
+                   - /var/run/:/host/var/run/
+                   - /home/ec2-user/fabric-samples/chaincode:/opt/gopath/src/github.com/
+                   - /home/ec2-user:/opt/home' > docker-compose-cli.yaml
+
+              newgrp `id -gn`
+              /usr/local/bin/docker-compose -f docker-compose-cli.yaml up -d
+
+            - {
+                DOCKER_COMPOSE_VERSION: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", DOCKERCOMPOSE ],
+                GO_VERSION: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", GO ],
+                FABRIC_CA_VERSION: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", FABRICCA ],
+                TLS_CERT_URL: !FindInMap [ AWSRegionToCertificateUrl, !Ref "AWS::Region", TLS ],
+                FABRIC_TOOLS_VERSION: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", FABRICTOOLS ],
+                MEMBER_ID: !Ref "MemberID",
+                PEER_NODE_ENDPOINT: !Ref "PeerNodeEndpoint",
+                ORDERING_SERVICE_ENDPOINT: !Ref "OrderingServiceEndpoint",
+                FABRIC_CA_ENDPOINT: !Ref "FabricCAEndpoint"
+            }
+
+Outputs:
+  InstanceId:
+    Description: InstanceId of your EC2 client instance
+    Value: !Ref 'EC2Instance'
+  AZ:
+    Description: Availability Zone of your EC2 client instance
+    Value: !GetAtt [EC2Instance, AvailabilityZone]
+  PublicDNS:
+    Description: Public DNSName of your EC2 client instance
+    Value: !GetAtt [EC2Instance, PublicDnsName]
+  PublicIP:
+    Description: Public IP address of your EC2 client instance
+    Value: !GetAtt [EC2Instance, PublicIp]
