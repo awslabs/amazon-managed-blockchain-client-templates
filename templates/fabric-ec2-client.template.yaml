@@ -94,6 +94,7 @@ Mappings:
       GO: "1.10.3"
       FABRICTOOLS: "1.2.0"
       FABRICCA: "release-1.2"
+      FABRICSAMPLESBRANCH: "release-1.2"
 
 Resources:
   EC2Instance:
@@ -133,6 +134,7 @@ Resources:
               tar -xzf go${GO_VERSION}.linux-amd64.tar.gz
               mv go /usr/local
               yum install libtool-ltdl-devel -y
+              pip install --upgrade awscli
               yum install git -y
 
               echo 'export GOROOT=/usr/local/go
@@ -149,6 +151,11 @@ Resources:
               cd /home/ec2-user
 
               echo 'export PATH=$PATH:/home/ec2-user/go/src/github.com/hyperledger/fabric-ca/bin' >> /home/ec2-user/.bash_profile
+              echo 'export MSP_PATH=/opt/home/admin-msp
+              export MSP=${MEMBER_ID}
+              export ORDERER=${ORDERING_SERVICE_ENDPOINT}
+              export PEER=${PEER_NODE_ENDPOINT}
+              export CA_ENDPOINT=${FABRIC_CA_ENDPOINT}' >> /home/ec2-user/.bash_profile
               source /home/ec2-user/.bash_profile
 
 
@@ -185,7 +192,7 @@ Resources:
               wget ${TLS_CERT_URL}
 
               # Download sample chaincode from github
-              git clone https://github.com/hyperledger/fabric-samples.git
+              git clone -b ${FABRIC_SAMPLES_BRANCH} https://github.com/hyperledger/fabric-samples.git
 
               # Bake in some fabric related ENV variables for convenience
               echo 'export ORDERER=${ORDERING_SERVICE_ENDPOINT}' >> /home/ec2-user/.bash_profile
@@ -223,6 +230,7 @@ Resources:
                 FABRIC_CA_VERSION: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", FABRICCA ],
                 TLS_CERT_URL: !FindInMap [ AWSRegionToCertificateUrl, !Ref "AWS::Region", TLS ],
                 FABRIC_TOOLS_VERSION: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", FABRICTOOLS ],
+                FABRIC_SAMPLES_BRANCH: !FindInMap [ FrameworkVersionToPackageVersion, !Ref "Version", FABRICSAMPLESBRANCH ],
                 MEMBER_ID: !Ref "MemberID",
                 PEER_NODE_ENDPOINT: !Ref "PeerNodeEndpoint",
                 ORDERING_SERVICE_ENDPOINT: !Ref "OrderingServiceEndpoint",
