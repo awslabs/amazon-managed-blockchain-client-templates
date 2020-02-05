@@ -142,15 +142,11 @@ Resources:
               export PATH=$GOROOT/bin:$PATH' >> /home/ec2-user/.bash_profile
               source /home/ec2-user/.bash_profile
 
-              # Clone Fabric-ca github repository
-              go get -u github.com/hyperledger/fabric-ca/cmd/...
-              cd /home/ec2-user/go/src/github.com/hyperledger/fabric-ca
-              git fetch
-              git checkout ${FABRIC_CA_VERSION}
-              make fabric-ca-client
+              wget https://github.com/hyperledger/fabric-ca/releases/download/v1.2.1/hyperledger-fabric-ca-linux-amd64-1.2.1.tar.gz
+              tar -xzf hyperledger-fabric-ca-linux-amd64-1.2.1.tar.gz
               cd /home/ec2-user
 
-              echo 'export PATH=$PATH:/home/ec2-user/go/src/github.com/hyperledger/fabric-ca/bin' >> /home/ec2-user/.bash_profile
+              echo 'export PATH=$PATH:/home/ec2-user/bin' >> /home/ec2-user/.bash_profile
               echo 'export MSP_PATH=/opt/home/admin-msp
               export MSP=${MEMBER_ID}
               export ORDERER=${ORDERING_SERVICE_ENDPOINT}
