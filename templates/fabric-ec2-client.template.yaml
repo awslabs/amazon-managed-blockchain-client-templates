@@ -32,8 +32,8 @@ Parameters:
   Version:
     Description: The version of the blockchain framework that the network uses.
     Type: String
-    Default: 1.2
-    AllowedValues: [1.2]
+    Default: 1.4
+    AllowedValues: [1.2, 1.4]
     ConstraintDescription: must be a version supported by Amazon Managed Blockchain.
   SubnetID:
     Description: The ID of an existing subnet into which the EC2 instance is launched. Must be a public subnet.
@@ -83,18 +83,44 @@ Conditions:
 
 Mappings:
   AWSRegionToAMI:
+    ap-northeast-2:
+      HVM64: ami-00dc207f8ba6dc919
+    ap-northeast-1:
+      HVM64: ami-00a5245b4816c38e6
+    ap-southeast-1:
+      HVM64: ami-05b3bcf7f311194b3
+    eu-west-1:
+      HVM64: ami-08935252a36e25f85
+    eu-west-2:
+      HVM64: ami-01419b804382064e4
     us-east-1:
       HVM64: ami-0080e4c5bc078760e
   AWSRegionToCertificateUrl:
+    ap-northeast-2:
+      TLS: https://s3.ap-northeast-2.amazonaws.com/ap-northeast-2.managedblockchain/etc/managedblockchain-tls-chain.pem
+    ap-northeast-1:
+      TLS: https://s3.ap-northeast-1.amazonaws.com/ap-northeast-1.managedblockchain/etc/managedblockchain-tls-chain.pem
+    ap-southeast-1:
+      TLS: https://s3.ap-southeast-1.amazonaws.com/ap-southeast-1.managedblockchain/etc/managedblockchain-tls-chain.pem
+    eu-west-1:
+      TLS: https://s3.eu-west-1.amazonaws.com/eu-west-1.managedblockchain/etc/managedblockchain-tls-chain.pem
+    eu-west-2:
+      TLS: https://s3.eu-west-2.amazonaws.com/eu-west-2.managedblockchain/etc/managedblockchain-tls-chain.pem
     us-east-1:
-      TLS: https://s3.amazonaws.com/us-east-1.managedblockchain/etc/managedblockchain-tls-chain.pem
+      TLS: https://s3.us-east-1.amazonaws.com/us-east-1.managedblockchain/etc/managedblockchain-tls-chain.pem
   FrameworkVersionToPackageVersion:
     "1.2":
       DOCKERCOMPOSE: "1.20.0"
       GO: "1.10.3"
-      FABRICTOOLS: "1.2.0"
-      FABRICCA: "release-1.2"
+      FABRICTOOLS: "1.2.1"
+      FABRICCA: "1.2.1"
       FABRICSAMPLESBRANCH: "release-1.2"
+    "1.4":
+      DOCKERCOMPOSE: "1.20.0"
+      GO: "1.14.2"
+      FABRICTOOLS: "1.4.7"
+      FABRICCA: "1.4.7"
+      FABRICSAMPLESBRANCH: "release-1.4"
 
 Resources:
   EC2Instance:
@@ -142,8 +168,8 @@ Resources:
               export PATH=$GOROOT/bin:$PATH' >> /home/ec2-user/.bash_profile
               source /home/ec2-user/.bash_profile
 
-              wget https://github.com/hyperledger/fabric-ca/releases/download/v1.2.1/hyperledger-fabric-ca-linux-amd64-1.2.1.tar.gz
-              tar -xzf hyperledger-fabric-ca-linux-amd64-1.2.1.tar.gz
+              wget https://github.com/hyperledger/fabric-ca/releases/download/v${FABRIC_CA_VERSION}/hyperledger-fabric-ca-linux-amd64-${FABRIC_CA_VERSION}.tar.gz
+              tar -xzf hyperledger-fabric-ca-linux-amd64-${FABRIC_CA_VERSION}.tar.gz
               cd /home/ec2-user
 
               echo 'export PATH=$PATH:/home/ec2-user/bin' >> /home/ec2-user/.bash_profile
