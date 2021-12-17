@@ -32,8 +32,8 @@ Parameters:
   Version:
     Description: The version of the blockchain framework that the network uses.
     Type: String
-    Default: 1.4
-    AllowedValues: [1.2, 1.4]
+    Default: 2.2
+    AllowedValues: [1.2, 1.4, 2.2]
     ConstraintDescription: must be a version supported by Amazon Managed Blockchain.
   SubnetID:
     Description: The ID of an existing subnet into which the EC2 instance is launched. Must be a public subnet.
@@ -121,6 +121,12 @@ Mappings:
       FABRICTOOLS: "1.4.7"
       FABRICCA: "1.4.7"
       FABRICSAMPLESBRANCH: "release-1.4"
+    "2.2":
+      DOCKERCOMPOSE: "1.20.0"
+      GO: "1.14.2"
+      FABRICTOOLS: "2.2.4"
+      FABRICCA: "1.4.7"
+      FABRICSAMPLESBRANCH: "release-2.2"
 
 Resources:
   EC2Instance:
